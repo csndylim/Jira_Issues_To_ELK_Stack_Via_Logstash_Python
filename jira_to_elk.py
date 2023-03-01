@@ -4,7 +4,6 @@
 from jira import JIRA
 from elasticsearch import Elasticsearch
 import datetime
-import pytz
 import json
 
 # =============================================================================
@@ -95,5 +94,16 @@ for issue in issues:
     # issue_dict['updated_date'] = issue.fields.updated if issue.fields.updated else None
     # issue_dict['created_date'] = issue.fields.created if issue.fields.created else None
     
-    # Index the issue in Elasticsearch
-    es.index(index='jiratestv2-2023-03-01', body=json.dumps(issue_dict))
+    # Get the current date
+    current_date = str(datetime.date.today().strftime('%Y-%m-%d'))
+
+    # Index the Jira issues in Elasticsearch using the current date
+    es.index(index=f'jiratestv3-{current_date}', body=json.dumps(issue_dict))
+
+    # schedule to run every day at 00:00
+    # 0 0 * * * /usr/bin/python3 /home/ubuntu/jira_to_elk.py
+    
+
+# =============================================================================
+# End of script
+# =============================================================================
