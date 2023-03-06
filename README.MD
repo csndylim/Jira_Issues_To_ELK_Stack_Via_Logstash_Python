@@ -70,7 +70,7 @@ Install the libraries
 pip install schedule jira elasticsearch requests logging
 ```
 
-4. Run the first batch of jira issues from Jira Service Management to ELK
+## 4. Run the first batch of jira issues from Jira Service Management to ELK
 In `docker-compose.yaml`, comment line 51 and uncomment 52
 ```bash
 Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
@@ -78,7 +78,7 @@ Line 52  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_comm
 Line 53 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
 
-5. Update the jira issues that are updated in Jira Service Management on ELK
+## 5. Update the jira issues that are updated in Jira Service Management on ELK
 In `docker-compose.yaml`, comment line 52 and uncomment 53
 ```bash
 Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
