@@ -50,20 +50,25 @@ class JiraToElasticsearch:
         jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date()
         issues = self.jira.search_issues(jql_query)
         logging.info("Fetched " + str(len(issues)) + " issues from Jira with query: " + str(jql_query))
+
         issue_keys = [issue.key for issue in issues]
+        logging.info("These are the updated issues keys: " + str(issue_keys))
         return issue_keys
 
     def delete_issues(self,  issue_keys):
         for issue_key in issue_keys:
             search_body = { "query": { "match": { "key": issue_key } }}
-            res = self.es.search(index = self.elastic_index, body=search_body)
-            doc_id = res["hits"]["hits"][0]["_id"]
+            result = self.es.search(index = self.elastic_index, body=search_body)
+
+            doc_id = result["hits"]["hits"][0]["_id"]
             self.es.delete(index= self.elastic_index, doc_type='_doc', id= doc_id)
             logging.info("Deleted the issue key: " + issue_key + " with docid " + str(doc_id) + " from Elasticsearch index") 
 
     def index_issues(self, max_results):
-        current_date = self._get_current_date()
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + current_date #same as authentication code coz same issues keys
+        # Specify project id
+        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() #same as authentication code coz same issues keys
+        
+        # Get the issues
         start_at = 0
         issues = []
         while True:
@@ -73,12 +78,15 @@ class JiraToElasticsearch:
             issues += results
             start_at += max_results
 
+        # Run each document aka an issue in a loop
         for issue in issues:
             issue_dict = {}
 
+            # Extract all fields from Jira issue
             for field_name in issue.raw['fields']:
                 issue_dict[field_name] = issue.raw['fields'][field_name]
 
+            # Extract comments
             try:
                 comments = []
                 for comment in issue.fields.comment.comments:
@@ -87,6 +95,20 @@ class JiraToElasticsearch:
             except AttributeError:
                 issue_dict['comments'] = []
 
+            # Extract worklogs
+            try:
+                worklogs = []
+                for worklog in issue.fields.worklog.worklogs:
+                    worklogs.append({
+                        'author': worklog.author.displayName,
+                        'timeSpent': worklog.timeSpent,
+                        'created': worklog.created
+                    })
+                issue_dict['worklogs'] = worklogs
+            except AttributeError:
+                issue_dict['worklogs'] = []
+
+            # Extract attachments
             try:
                 attachments = []
                 for attachment in issue.fields.attachment:
@@ -95,26 +117,21 @@ class JiraToElasticsearch:
             except AttributeError:
                 issue_dict['attachments'] = []
             
+            # Add the issue key and timestamp
             issue_dict['key'] = issue.key
-
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-            # Get the current date
-            current_date = str(datetime.date.today().strftime('%Y-%m-%d'))
-
-            # Index the Jira issues in Elasticsearch using the current date
+            # Index the Jira issues in Elasticsearch index
             self.es.index(index= self.elastic_index , body=json.dumps(issue_dict))
+
             # Log the successful upload
             logging.info('Successfully uploaded issue with key: %s' % issue.key)
 
-    
     def run(self):
         self.authenticate()
-        max_results = 100
         issue_keys = self.get_issues()
-        logging.info("These are the updated issues keys: " + str(issue_keys))
         self.delete_issues(issue_keys)
-        self.index_issues(max_results)
+        self.index_issues(max_results = 100)
 
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(

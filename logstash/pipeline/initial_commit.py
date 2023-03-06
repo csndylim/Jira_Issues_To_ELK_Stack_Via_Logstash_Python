@@ -43,12 +43,9 @@ class JiraToElasticsearch:
         )
         logging.info("Authenticated Elasticsearch with username: " + self.elastic_username + " and host: " + self.elastic_host + ":" + str(self.elastic_port))
 
-    def get_issues(self):
+    def index_issues(self, max_results):
         # Specify project id
         jql_query = 'project = ' + self.jira_issue
-
-        # Set the maximum number of issues to be retrieved
-        max_results = 100
 
         # Get the issues
         start_at = 0
@@ -60,7 +57,7 @@ class JiraToElasticsearch:
             issues += results
             start_at += max_results
 
-        # Index the Jira issues in Elasticsearch
+        # Run each document aka an issue in a loop
         for issue in issues:
             issue_dict = {}
 
@@ -90,6 +87,7 @@ class JiraToElasticsearch:
             except AttributeError:
                 issue_dict['worklogs'] = []
 
+            # Extract attachments
             try:
                 attachments = []
                 for attachment in issue.fields.attachment:
@@ -98,17 +96,11 @@ class JiraToElasticsearch:
             except AttributeError:
                 issue_dict['attachments'] = []
 
+            # Add the issue key and timestamp
             issue_dict['key'] = issue.key
-            # issue_dict['summary'] = issue.fields.summary
-            # issue_dict['description'] = issue.fields.description
-            # issue_dict['assignee'] = issue.fields.assignee.name if issue.fields.assignee else None
-            # issue_dict['reporter'] = issue.fields.reporter.name if issue.fields.reporter else None
-            # issue_dict['updated_date'] = issue.fields.updated if issue.fields.updated else None
-            # issue_dict['created_date'] = issue.fields.created if issue.fields.created else None
-
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-            # Index the Jira issues in Elasticsearch using the current date
+            # Index the Jira issues in Elasticsearch index
             self.es.index(index= self.elastic_index, body=json.dumps(issue_dict))
             
             # Log the successful upload
@@ -116,7 +108,7 @@ class JiraToElasticsearch:
 
     def run(self):
         self.authenticate()
-        self.get_issues()
+        self.index_issues(max_results = 100)
 
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
