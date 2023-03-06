@@ -1,0 +1,99 @@
+version: '3.7'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
+    container_name: elk_${ELASTIC_HOST}
+    hostname: ${ELASTIC_HOST}
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms384m -Xmx384m"
+      - ELASTIC_USERNAME=${ELASTIC_USR}
+      - ELASTIC_PASSWORD=${ELASTIC_PWD}
+      - xpack.security.enabled=true
+      - node.name=${ELASTIC_HOST}
+      - cluster.name=elk-cluster
+      - path.repo=/tmp/elk_snaps
+    networks:
+      - elk_stack
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - 9200:9200
+      - 9300:9300
+    restart: "no"
+    mem_limit: 1g
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
+    container_name: elk_${LOGSTASH_HOST}
+    hostname: ${LOGSTASH_HOST}
+    networks:
+      - elk_stack
+    environment:
+        - "LS_JAVA_OPTS=-Xms256m -Xmx256m"  #  \"every\" => \"20s\"
+        - xpack.security.enabled=true
+    ports:
+      - 5044:5044     # beats
+      - 5000:5000/tcp # logstash
+      - 5000:5000/udp # logstash
+      - 9600:9600     # logstash monitoring port
+
+    # command: logstash -f /usr/share/logstash/pipeline/logstash.conf
+    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/jira_to_elk.py", "|", "/usr/share/logstash/bin/logstash", "-f", "/usr/share/logstash/pipeline/logstash.conf"]
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+
+    restart: "no"
+    depends_on:
+      - elasticsearch
+      - jira
+    mem_limit: 1g
+
+  kibana:
+    container_name: elk_${KIBANA_HOST}
+    hostname: ${KIBANA_HOST}
+    image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
+    environment:
+      - ELASTICSEARCH_HOSTS=http://${ELASTIC_HOST}:9200
+      - "JAVA_OPTS=-Xms256m -Xmx256m"
+      - SERVER_NAME=${KIBANA_HOST}
+      - ELASTICSEARCH_USERNAME=${ELASTIC_USR}
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PWD}
+      - XPACK_SECURITY_ENABLED=true
+    networks:
+      - elk_stack
+    ports:
+      - 5601:5601
+    restart: "no"
+    depends_on:
+      - elasticsearch
+    mem_limit: 1g
+
+
+  jira:
+    image: atlassian/jira-software:8.14
+    ports:
+      - 8080:8080
+    networks:
+      - elk_stack
+    restart: "no"
+    mem_limit: 1g
+#     volumes:
+#       - 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:/var/atlassian/application-data/jira
+
+# volumes:
+#   1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:
+#     external: true
+#     name: 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1
+
+networks:
+  elk_stack:
+    name: elk_stack
