@@ -2,10 +2,10 @@
 
 ## 0. Clone this repository
 FYI
-elasticsearch's image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
-logstash's image: docker.elastic.co/logstash/logstash:7.16.3
-kibana's image: docker.elastic.co/kibana/kibana:7.16.3
-jira's image: atlassian/jira-software:8.14
+* elasticsearch's image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
+* logstash's image: docker.elastic.co/logstash/logstash:7.16.3
+* kibana's image: docker.elastic.co/kibana/kibana:7.16.3
+* jira's image: atlassian/jira-software:8.14
 
 ## 1. Download the volume of Jira docker container (Not needed)
 
