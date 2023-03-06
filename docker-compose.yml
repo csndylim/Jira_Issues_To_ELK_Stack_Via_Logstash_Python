@@ -46,8 +46,11 @@ services:
       - 5000:5000/udp # logstash
       - 9600:9600     # logstash monitoring port
 
-    # command: logstash -f /usr/share/logstash/pipeline/logstash.conf
-    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/jira_to_elk.py", "|", "/usr/share/logstash/bin/logstash", "-f", "/usr/share/logstash/pipeline/logstash.conf"]
+    # command: logstash -f /usr/share/logstash/pipeline/logstash.conf # not needed
+    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
+    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline
 
