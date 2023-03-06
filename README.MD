@@ -54,7 +54,7 @@ volumes:
 docker-compose up -d
 ```
 
-## 2. Install python on logstash
+## 3. Install python on logstash
 Remotely access `elk_logstash` on cmd with root privileges
 ```bash
 docker exec -u root -it --workdir / elk_logstash bash
@@ -70,7 +70,7 @@ Install the libraries
 pip install schedule jira elasticsearch requests logging
 ```
 
-3. Run the first batch of jira issues from Jira Service Management to ELK
+4. Run the first batch of jira issues from Jira Service Management to ELK
 In `docker-compose.yaml`, comment line 51 and uncomment 52
 ```bash
 Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
@@ -78,7 +78,7 @@ Line 52  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_comm
 Line 53 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
 
-4. Update the jira issues that are updated in Jira Service Management on ELK
+5. Update the jira issues that are updated in Jira Service Management on ELK
 In `docker-compose.yaml`, comment line 52 and uncomment 53
 ```bash
 Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
