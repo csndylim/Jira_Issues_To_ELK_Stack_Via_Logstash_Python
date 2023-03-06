@@ -1,6 +1,6 @@
-# Ingestion of Jira issues into ELK via Logstash-Python
+# Ingestion of Jira issues from Jira Service Management into ELK Stack via Logstash-Python
 
-## Download the volume of Jira docker container
+## Download the volume of Jira docker container (Not needed)
 
 Go to onedrive to download `test.tar` coz Github says the file is over 100MB, cannot upload.
 
