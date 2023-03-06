@@ -1,8 +1,10 @@
-# Ingestion of Jira issues from Jira Service Management into ELK Stack via Logstash-Python
+# Ingestion of Jira issues from Jira Service Management into Elasticsearch-Logstash-Kibana (ELK) Stack via Logstash-Python
 
-## Download the volume of Jira docker container (Not needed)
+## 0. Clone this repository
 
-Go to onedrive to download `test.tar` coz Github says the file is over 100MB, cannot upload.
+## 1. Download the volume of Jira docker container (Not needed)
+
+Go to my onedrive to download `test.tar` coz Github says the file is over 100MB, cannot upload.
 
 You can mount the `test.tar.gz` into a Docker container using the -v flag in the docker run command. 
 
@@ -47,8 +49,12 @@ volumes:
     name: test
 ```
 
+## 2. Run the containers in the same directory as docker-compose.yaml, with this command on cmd
+```bash
+docker-compose up -d
+```
 
-## Install python on logstash
+## 2. Install python on logstash
 Remotely access `elk_logstash` on cmd with root privileges
 ```bash
 docker exec -u root -it --workdir / elk_logstash bash
@@ -64,3 +70,18 @@ Install the libraries
 pip install schedule jira elasticsearch requests logging
 ```
 
+3. Run the first batch of jira issues from Jira Service Management to ELK
+In `docker-compose.yaml`, comment line 51 and uncomment 52
+```bash
+Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
+Line 52  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 53 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+```
+
+4. Update the jira issues that are updated in Jira Service Management on ELK
+In `docker-compose.yaml`, comment line 52 and uncomment 53
+```bash
+Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
+Line 52 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 53  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+```
