@@ -1,11 +1,12 @@
 # Ingestion of Jira issues from Jira Service Management into Elasticsearch-Logstash-Kibana (ELK) Stack via Logstash-Python
 
 ## 0. Clone this repository
-FYI
-elasticsearch's image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
-logstash's image: docker.elastic.co/logstash/logstash:7.16.3
-kibana's image: docker.elastic.co/kibana/kibana:7.16.3
-jira's image: atlassian/jira-software:8.14
+FYI, the versions I am using.... Any version can work but you can make the change in the `docker-compose.yaml` file for containers, and `installation.py` for python
+* elasticsearch's image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
+* logstash's image: docker.elastic.co/logstash/logstash:7.16.3
+* kibana's image: docker.elastic.co/kibana/kibana:7.16.3
+* jira's image: atlassian/jira-software:8.14
+* python: 2.70
 
 ## 1. Download the volume of Jira docker container (Not needed)
 
@@ -31,62 +32,57 @@ In the `docker-compose.yml`, add the following `volumes` lines in the jira secti
 
 I'm not sure whether this part is correct coz I never tried mounting the `test.tar.gz`
 
-```
+``` bash
 services:
-  elasticsearch:
-  logstash:
-  kibana:
-  ...
-  jira:
-    image: atlassian/jira-software:8.14
-    ports:
-      - 8080:8080
-    networks:
-      - elk_stack
-    restart: "no"
-    mem_limit: 1g
+   ...
+   jira:
+     image: atlassian/jira-software:8.14
+     ports:
+       - 8080:8080
+     networks:
+       - elk_stack
+     restart: "no"
+     mem_limit: 1g
     volumes:
-      - test:/var/atlassian/application-data/jira
+      - 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:/var/atlassian/application-data/jira
 
 volumes:
   1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:
     external: true
-    name: test
+    name: 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1
 ```
 
 ## 2. Run the containers in the same directory as docker-compose.yaml, with this command on cmd
 ```bash
 docker-compose up -d
 ```
-
-## 3. Install python on logstash
-Remotely access `elk_logstash` on cmd with root privileges
+The output on command line should look something like this with all 4 containers started and running.
 ```bash
-docker exec -u root -it --workdir / elk_logstash bash
+[+] Running 4/4
+ - Container elk_elasticsearch  Started                                                                            2.9s
+ - Container elk_kibana         Started                                                                            4.8s
+ - Container elk-docker-jira-1  Started                                                                            2.9s
+ - Container elk_logstash       Started                                                                            6.4s
 ```
 
-Install pip - I think python is already installed but is 2.7 version
+## 3. Run the first batch of jira issues from Jira Service Management to ELK
+In `docker-compose.yaml`, comment line 51 and uncomment 50
 ```bash
-curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python
+Line 50  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
 
-Install the libraries
+## 4. Update the jira issues that are updated in Jira Service Management on ELK
+In `docker-compose.yaml`, comment line 50 and uncomment 51
 ```bash
-pip install schedule jira elasticsearch requests logging
+Line 50 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 51  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
 
-## 4. Run the first batch of jira issues from Jira Service Management to ELK
-In `docker-compose.yaml`, comment line 51 and uncomment 52
-```bash
-Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
-Line 52  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 53 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+## 5. Remove the first two lines of codes in `initial_commit.py` and `delete_update.py` (Optional)
+```python
+import os
+os.system("python /usr/share/logstash/pipeline/installation.py")
 ```
-
-## 5. Update the jira issues that are updated in Jira Service Management on ELK
-In `docker-compose.yaml`, comment line 52 and uncomment 53
-```bash
-Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
-Line 52 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 53  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
-```
+Code explaination:
+The first two lines call the script - `installation.py` which installs pip and python libraries on logstash container. I did not remove them as the logstash container might think it is not permanently installed as I am using docker containers.
