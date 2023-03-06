@@ -58,32 +58,13 @@ volumes:
 ```bash
 docker-compose up -d
 ```
-
-## 3. Install pip and python libraries on logstash container via `installation.py`
-```python
-import os
-os.system("python /usr/share/logstash/pipeline/installation.py")
-```
-Remotely access `elk_logstash` on cmd with root privileges
+The output on command line should look something like this with all 4 containers started and running.
 ```bash
-docker exec -u root -it --workdir / elk_logstash bash
-```
-
-Install pip - I think python is already installed but is 2.7 version
-```bash
-curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python
-```
-
-Install the libraries
-```bash
-pip install schedule jira elasticsearch requests logging
-```
-
-After that, you can remove the lines of codes at `initial_commit.py` and `delete_update.py`.
-I did not remove them as the logstash container might think it is not 
-```python
-import os
-os.system("python /usr/share/logstash/pipeline/installation.py")
+[+] Running 4/4
+ - Container elk_elasticsearch  Started                                                                            2.9s
+ - Container elk_kibana         Started                                                                            4.8s
+ - Container elk-docker-jira-1  Started                                                                            2.9s
+ - Container elk_logstash       Started                                                                            6.4s
 ```
 
 ## 3. Run the first batch of jira issues from Jira Service Management to ELK
