@@ -1,8 +1,5 @@
-# # Debugging the container
-# import time
-# while True:
-#     print("Hello")
-#     time.sleep(10)
+import os
+os.system("python /usr/share/logstash/pipeline/installation.py")
 
 from jira import JIRA
 from elasticsearch import Elasticsearch
@@ -14,7 +11,7 @@ import logging
 
 class JiraToElasticsearch:
 
-    def __init__(self, jira_username, jira_password, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme):
+    def __init__(self, jira_username, jira_password, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme, elastic_index):
         self.jira_username = jira_username
         self.jira_password = jira_password
         self.jira_host = jira_host
@@ -25,6 +22,7 @@ class JiraToElasticsearch:
         self.elastic_host = elastic_host
         self.elastic_port = elastic_port
         self.elastic_scheme = elastic_scheme
+        self.elastic_index = elastic_index
         self.jira = None
         self.es = None
 
@@ -35,6 +33,7 @@ class JiraToElasticsearch:
         # Set up Jira
         options = {'server': 'http://{}:{}'.format(self.jira_host, self.jira_port)}
         self.jira = JIRA(options, basic_auth=(self.jira_username, self.jira_password))
+        logging.info("Authenticated Jira with username: " + self.jira_username + " and host: " + self.jira_host + ":" + str(self.jira_port)) 
 
         # Set up Elasticsearch
         self.es = Elasticsearch(
@@ -42,6 +41,7 @@ class JiraToElasticsearch:
             http_auth=(self.elastic_username, self.elastic_password),
             verify_certs=True
         )
+        logging.info("Authenticated Elasticsearch with username: " + self.elastic_username + " and host: " + self.elastic_host + ":" + str(self.elastic_port))
 
     def get_issues(self):
         # Specify project id
@@ -90,6 +90,14 @@ class JiraToElasticsearch:
             except AttributeError:
                 issue_dict['worklogs'] = []
 
+            try:
+                attachments = []
+                for attachment in issue.fields.attachment:
+                    attachments.append(attachment.filename)
+                issue_dict['attachments'] = attachments
+            except AttributeError:
+                issue_dict['attachments'] = []
+
             issue_dict['key'] = issue.key
             # issue_dict['summary'] = issue.fields.summary
             # issue_dict['description'] = issue.fields.description
@@ -100,11 +108,8 @@ class JiraToElasticsearch:
 
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-            # Get the current date
-            current_date = str(datetime.date.today().strftime('%Y-%m-%d'))
-
             # Index the Jira issues in Elasticsearch using the current date
-            self.es.index(index='jiratestv14-' + current_date, body=json.dumps(issue_dict))
+            self.es.index(index= self.elastic_index, body=json.dumps(issue_dict))
             
             # Log the successful upload
             logging.info('Successfully uploaded issue with key: %s' % issue.key)
@@ -124,7 +129,8 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_password="P@$$w0rd",
     elastic_host="elasticsearch",
     elastic_port=9200,
-    elastic_scheme="http"
+    elastic_scheme="http",
+    elastic_index ='jiratestv16-' + str(datetime.date.today().strftime('%Y-%m-%d'))
 )
 
 # Schedule the script
