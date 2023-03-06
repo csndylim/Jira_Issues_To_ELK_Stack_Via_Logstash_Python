@@ -32,27 +32,22 @@ In the `docker-compose.yml`, add the following `volumes` lines in the jira secti
 
 I'm not sure whether this part is correct coz I never tried mounting the `test.tar.gz`
 
-```
-services:
-  elasticsearch:
-  logstash:
-  kibana:
-  ...
-  jira:
-    image: atlassian/jira-software:8.14
-    ports:
-      - 8080:8080
-    networks:
-      - elk_stack
-    restart: "no"
-    mem_limit: 1g
+``` bash
+  # jira:
+  #   image: atlassian/jira-software:8.14
+  #   ports:
+  #     - 8080:8080
+  #   networks:
+  #     - elk_stack
+  #   restart: "no"
+  #   mem_limit: 1g
     volumes:
-      - test:/var/atlassian/application-data/jira
+      - 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:/var/atlassian/application-data/jira
 
 volumes:
   1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1:
     external: true
-    name: test
+    name: 1051ede03573f84b77948bda919f034945e80aa701a181a0c2b48fe3854377b1
 ```
 
 ## 2. Run the containers in the same directory as docker-compose.yaml, with this command on cmd
