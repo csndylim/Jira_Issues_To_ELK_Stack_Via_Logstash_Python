@@ -33,6 +33,8 @@ In the `docker-compose.yml`, add the following `volumes` lines in the jira secti
 I'm not sure whether this part is correct coz I never tried mounting the `test.tar.gz`
 
 ``` bash
+services:
+   ...
    jira:
      image: atlassian/jira-software:8.14
      ports:
