@@ -59,7 +59,11 @@ volumes:
 docker-compose up -d
 ```
 
-## 3. Install python on logstash
+## 3. Install pip and python libraries on logstash container via `installation.py`
+```python
+import os
+os.system("python /usr/share/logstash/pipeline/installation.py")
+```
 Remotely access `elk_logstash` on cmd with root privileges
 ```bash
 docker exec -u root -it --workdir / elk_logstash bash
@@ -75,18 +79,31 @@ Install the libraries
 pip install schedule jira elasticsearch requests logging
 ```
 
-## 4. Run the first batch of jira issues from Jira Service Management to ELK
-In `docker-compose.yaml`, comment line 51 and uncomment 52
-```bash
-Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
-Line 52  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 53 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+After that, you can remove the lines of codes at `initial_commit.py` and `delete_update.py`.
+I did not remove them as the logstash container might think it is not 
+```python
+import os
+os.system("python /usr/share/logstash/pipeline/installation.py")
 ```
 
-## 5. Update the jira issues that are updated in Jira Service Management on ELK
-In `docker-compose.yaml`, comment line 52 and uncomment 53
+## 3. Run the first batch of jira issues from Jira Service Management to ELK
+In `docker-compose.yaml`, comment line 51 and uncomment 50
 ```bash
-Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
-Line 52 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 53  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+Line 50  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
+
+## 4. Update the jira issues that are updated in Jira Service Management on ELK
+In `docker-compose.yaml`, comment line 50 and uncomment 51
+```bash
+Line 50 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+Line 51  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+```
+
+## 5. Remove the first two lines of codes in `initial_commit.py` and `delete_update.py` (Optional)
+```python
+import os
+os.system("python /usr/share/logstash/pipeline/installation.py")
+```
+Code explaination:
+The first two lines call the script - `installation.py` which installs pip and python libraries on logstash container. I did not remove them as the logstash container might think it is not permanently installed as I am using docker containers.
