@@ -1,7 +1,7 @@
 # Ingestion of Jira issues from Jira Service Management into Elasticsearch-Logstash-Kibana (ELK) Stack via Logstash-Python
 
 ## 0. Clone this repository
-FYI, the versions I am using.... Any version can work but you can make the change in the `docker-compose.yaml` file for containers, and `installation.py` for python
+FYI, these are the versions being used. Any version can work. Just change the versions inside the `docker-compose.yaml` file for containers, and `installation.py` for python
 * elasticsearch's image: docker.elastic.co/elasticsearch/elasticsearch:7.16.3
 * logstash's image: docker.elastic.co/logstash/logstash:7.16.3
 * kibana's image: docker.elastic.co/kibana/kibana:7.16.3
@@ -28,9 +28,9 @@ tar -xvf /test.tar.gz
 
 This will extract the contents of the test.tar.gz file to the current working directory inside the container.
 
-In the `docker-compose.yml`, add the following `volumes` lines in the jira section
+In the `docker-compose.yml`, add the following `volumes` lines in the jira section.
 
-I'm not sure whether this part is correct coz I never tried mounting the `test.tar.gz`
+Disclaimer: Not sure whether this part is correct coz never tried mounting the `test.tar.gz`.
 
 ``` bash
 services:
@@ -79,7 +79,8 @@ Line 50 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_com
 Line 51  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
 ```
 
-## 5. Remove the first two lines of codes in `initial_commit.py` and `delete_update.py` (Optional)
+## 5. Remove or comment the first two lines of codes in `initial_commit.py` and `delete_update.py`.  (Optional)
+Both files are located in `logstash\pipeline` folder.
 ```python
 import os
 os.system("python /usr/share/logstash/pipeline/installation.py")
