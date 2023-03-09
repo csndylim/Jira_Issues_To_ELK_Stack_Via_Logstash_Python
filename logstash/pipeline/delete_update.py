@@ -72,7 +72,7 @@ class JiraToElasticsearch:
         start_at = 0
         issues = []
         while True:
-            results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
+            results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results, expand='changelog')
             if not results:
                 break
             issues += results
@@ -85,38 +85,11 @@ class JiraToElasticsearch:
             # Extract all fields from Jira issue
             for field_name in issue.raw['fields']:
                 issue_dict[field_name] = issue.raw['fields'][field_name]
+    
+            # Extract changelog from Jira issue
+            for field_name in issue.raw['changelog']:
+                issue_dict[field_name] = issue.raw['changelog'][field_name]
 
-            # Extract comments
-            try:
-                comments = []
-                for comment in issue.fields.comment.comments:
-                    comments.append(comment.body)
-                issue_dict['comments'] = comments
-            except AttributeError:
-                issue_dict['comments'] = []
-
-            # Extract worklogs
-            try:
-                worklogs = []
-                for worklog in issue.fields.worklog.worklogs:
-                    worklogs.append({
-                        'author': worklog.author.displayName,
-                        'timeSpent': worklog.timeSpent,
-                        'created': worklog.created
-                    })
-                issue_dict['worklogs'] = worklogs
-            except AttributeError:
-                issue_dict['worklogs'] = []
-
-            # Extract attachments
-            try:
-                attachments = []
-                for attachment in issue.fields.attachment:
-                    attachments.append(attachment.filename)
-                issue_dict['attachments'] = attachments
-            except AttributeError:
-                issue_dict['attachments'] = []
-            
             # Add the issue key and timestamp
             issue_dict['key'] = issue.key
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -145,7 +118,7 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host="elasticsearch",
     elastic_port=9200,
     elastic_scheme="http",
-    elastic_index ='jiratestv16-' + str(datetime.date.today().strftime('%Y-%m-%d'))
+    elastic_index ='jiratestv17-' + str(datetime.date.today().strftime('%Y-%m-%d'))
 )
 
 # Schedule the script
