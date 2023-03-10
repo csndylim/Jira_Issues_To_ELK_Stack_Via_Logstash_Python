@@ -4,6 +4,8 @@ from elasticsearch.helpers import bulk
 
 import datetime
 import json
+
+
 # =============================================================================
 # # Authentication
 # =============================================================================
@@ -89,7 +91,7 @@ jql_query = "project = TEST AND updated >= " + current_date
 start_at = 0
 issues = []
 while True:
-    results = jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
+    results = jira.search_issues(jql_query, startAt=start_at, maxResults=max_results, expand='changelog')
     if not results:
         break
     issues += results
@@ -103,27 +105,10 @@ while True:
         for field_name in issue.raw['fields']:
             issue_dict[field_name] = issue.raw['fields'][field_name]
   
-        # Extract comments
-        try:
-            comments = []
-            for comment in issue.fields.comment.comments:
-                comments.append(comment.body)
-            issue_dict['comments'] = comments
-        except AttributeError:
-            issue_dict['comments'] = []
+        # Extract changelog from Jira issue
+        for field_name in issue.raw['changelog']:
+            issue_dict[field_name] = issue.raw['changelog'][field_name]
   
-        # Extract worklogs
-        try:
-            worklogs = []
-            for worklog in issue.fields.worklog.worklogs:
-                worklogs.append({
-                    'author': worklog.author.displayName,
-                    'timeSpent': worklog.timeSpent,
-                    'created': worklog.created
-                })
-            issue_dict['worklogs'] = worklogs
-        except AttributeError:
-            issue_dict['worklogs'] = []
   
         issue_dict['key'] = issue.key
         # issue_dict['summary'] = issue.fields.summary
@@ -136,12 +121,23 @@ while True:
         issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
   
         # Get the current date
-        current_date = str(datetime.date.today().strftime('%Y-%m-%d'))
+        # current_date = str(datetime.date.today().strftime('%Y-%m-%d'))
   
-        # Index the Jira issues in Elasticsearch using the current date
-        es.index(index='jiratestv14-' + current_date, body=json.dumps(issue_dict))
+        # # Index the Jira issues in Elasticsearch using the current date
+        # es.index(index='jiratestv14-' + current_date, body=json.dumps(issue_dict))
         
-        print (issue_dict)
+        # print (issue_dict)
 
 
 
+
+last_time = None
+for history in issue_dict['histories']:
+    for item in history['items']:
+        if 'toString' in item:
+            current_time = datetime.datetime.strptime(history['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
+            if last_time is not None:
+                time_elapsed = current_time - last_time
+                days = time_elapsed.total_seconds() / (24 * 3600)
+                print(f"Time elapsed: {days:.1f} days NewStatus: {item['toString']}")
+            last_time = current_time

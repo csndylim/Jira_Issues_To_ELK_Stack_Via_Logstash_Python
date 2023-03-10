@@ -47,8 +47,10 @@ services:
       - 9600:9600     # logstash monitoring port
 
     # command: logstash -f /usr/share/logstash/pipeline/logstash.conf # not needed
-    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
     # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/combined_bulk_update.py"]
+
 
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline
