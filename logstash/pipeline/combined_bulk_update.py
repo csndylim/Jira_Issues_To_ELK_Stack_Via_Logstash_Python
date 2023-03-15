@@ -68,10 +68,10 @@ class JiraToElasticsearch:
 
     def index_issues(self, max_results, is_bulk):
         if is_bulk == True:
-            jql_query = "project = " + self.jira_issue
+            jql_query = "project = " + self.jira_issue + " AND status = DONE"
         else:
             # Specify project id
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() 
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() + " AND status = DONE"
             
         # Get the issues
         start_at = 0
@@ -124,7 +124,7 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host="elasticsearch",
     elastic_port=9200,
     elastic_scheme="http",
-    elastic_index ='jiratestv17-' + str(datetime.date.today().strftime('%Y-%m-%d'))
+    elastic_index ='jiratestv18-' + str(datetime.date.today().strftime('%Y-%m-%d'))
 )
 
 # Schedule the script

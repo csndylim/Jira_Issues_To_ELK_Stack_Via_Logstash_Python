@@ -45,7 +45,7 @@ class JiraToElasticsearch:
 
     def index_issues(self, max_results):
         # Specify project id
-        jql_query = 'project = ' + self.jira_issue
+        jql_query = 'project = ' + self.jira_issue + " AND status = DONE"
 
         # Get the issues
         start_at = 0

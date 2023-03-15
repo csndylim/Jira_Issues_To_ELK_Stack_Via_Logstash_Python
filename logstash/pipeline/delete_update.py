@@ -47,7 +47,7 @@ class JiraToElasticsearch:
         return str(datetime.date.today().strftime('%Y-%m-%d'))
 
     def get_issues(self):
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date()
+        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() + " AND status = DONE"
         issues = self.jira.search_issues(jql_query)
         logging.info("Fetched " + str(len(issues)) + " issues from Jira with query: " + str(jql_query))
 
@@ -66,7 +66,7 @@ class JiraToElasticsearch:
 
     def index_issues(self, max_results):
         # Specify project id
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() #same as authentication code coz same issues keys
+        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() + " AND status = DONE" #same as authentication code coz same issues keys
         
         # Get the issues
         start_at = 0
