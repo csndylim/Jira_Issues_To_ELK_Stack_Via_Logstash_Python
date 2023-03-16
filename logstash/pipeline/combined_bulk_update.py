@@ -8,6 +8,8 @@ import json
 import schedule
 import logging
 import time
+import re
+import pytz
 
 class JiraToElasticsearch:
     
@@ -49,7 +51,7 @@ class JiraToElasticsearch:
         # return str(datetime.date.today().strftime('%Y-%m-%d')) 
 
     def get_updated_issues(self):
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date()
+        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() +  " AND status = DONE"
         issues = self.jira.search_issues(jql_query)
         logging.info("Fetched " + str(len(issues)) + " issues from Jira with query: " + str(jql_query))
 
@@ -65,6 +67,17 @@ class JiraToElasticsearch:
             doc_id = result["hits"]["hits"][0]["_id"]
             self.es.delete(index= self.elastic_index, doc_type='_doc', id= doc_id)
             logging.info("Deleted the issue key: " + issue_key + " with docid " + str(doc_id) + " from Elasticsearch index") 
+
+    def parse_datetime_with_timezone(self,dt_str):
+        # Parse the datetime string and the UTC offset separately
+        dt, tz_offset = re.match(r'(\d+-\d+-\d+T\d+:\d+:\d+\.\d+)(\+\d+)', dt_str).groups()
+        # Parse the UTC offset into hours and minutes
+        tz_hours = int(tz_offset[1:3])
+        tz_minutes = int(tz_offset[3:])
+        # Create the datetime object with the timezone information
+        dt = datetime.datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f')
+        dt_tz = pytz.utc.localize(dt + datetime.timedelta(hours=tz_hours, minutes=tz_minutes))
+        return dt_tz
 
     def index_issues(self, max_results, is_bulk):
         if is_bulk == True:
@@ -95,6 +108,41 @@ class JiraToElasticsearch:
             for field_name in issue.raw['changelog']:
                 issue_dict[field_name] = issue.raw['changelog'][field_name]
 
+            # Extract the time elapsed for each field
+
+            last_time = None
+            last_field = None
+            last_id = None
+            output = []
+            for history in issue_dict['histories']:
+                for item in history['items']:
+                    if 'toString' in item:
+                        current_id = history['id']
+                        current_value = item['toString']
+                        # current_time = datetime.datetime.strptime(issue_dict['histories'][0]['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
+                        # current_time = datetime.datetime.strptime(issue_dict['histories'][0]['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+
+                        current_time = self.parse_datetime_with_timezone(history['created'])
+                        
+                        if current_id != last_id and last_id is not None:
+                            time_elapsed = current_time - last_time
+                            days = time_elapsed.total_seconds() / (24 * 3600)
+                            output.append((last_field, days))
+            
+                        last_id = current_id
+                        last_field = current_value
+                        last_time = current_time
+            
+            # print the time elapsed for the last field
+            if last_field is not None:
+                time_elapsed = datetime.datetime.now(pytz.utc) - last_time
+                days = time_elapsed.total_seconds() / (24 * 3600)
+                output.append((last_field, str(days)))
+
+            issue_dict["elapsed_time"] = str(output)
+            logging.info('time output: %s' % str(output))
+
+
             # Add the issue key and timestamp
             issue_dict['key'] = issue.key
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -124,7 +172,7 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host="elasticsearch",
     elastic_port=9200,
     elastic_scheme="http",
-    elastic_index ='jiratestv18-' + str(datetime.date.today().strftime('%Y-%m-%d'))
+    elastic_index ='jiratestv20-' + str(datetime.date.today().strftime('%Y-%m-%d'))
 )
 
 # Schedule the script
