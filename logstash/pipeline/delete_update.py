@@ -93,7 +93,7 @@ class JiraToElasticsearch:
             # Extract time in status from Jira issue
             tis_url = "http://"+ self.jira_host + ":" + self.jira_port + "/rest/tis/report/1.0/api/issue?issueKey=" + issue.key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
             response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
-            test = (response.content) # or do something else with the response data
+            test = json.loads(response.text) # or do something else with the response data
 
             # Extract changelog from Jira issue
             for field_name in issue.raw['changelog']:
