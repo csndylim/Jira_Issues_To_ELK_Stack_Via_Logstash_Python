@@ -6,8 +6,11 @@ from elasticsearch import Elasticsearch
 import datetime
 import json
 import schedule
-import time
 import logging
+import time
+import re
+import pytz
+import requests
 
 class JiraToElasticsearch:
 
@@ -65,9 +68,44 @@ class JiraToElasticsearch:
             for field_name in issue.raw['fields']:
                 issue_dict[field_name] = issue.raw['fields'][field_name]
 
+            # Extract time in status from Jira issue
+            tis_url = "http://"+ self.jira_host + ":" + self.jira_port + "/rest/tis/report/1.0/api/issue?issueKey=" + issue.key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
+            response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+            test = (response.content) # or do something else with the response data
+
             # Extract changelog from Jira issue
             for field_name in issue.raw['changelog']:
                 issue_dict[field_name] = issue.raw['changelog'][field_name]
+
+            # Extract the time elapsed for each field
+            last_time = None
+            last_field = None
+            last_id = None
+            output = []
+            for history in issue_dict['histories']:
+                for item in history['items']:
+                    if 'toString' in item:
+                        current_id = history['id']
+                        current_value = item['toString']
+                        current_time = self.parse_datetime_with_timezone(history['created'])
+                        
+                        if current_id != last_id and last_id is not None:
+                            time_elapsed = current_time - last_time
+                            days = time_elapsed.total_seconds() / (24 * 3600)
+                            output.append((last_field, days))
+            
+                        last_id = current_id
+                        last_field = current_value
+                        last_time = current_time
+            
+            # print the time elapsed for the last field
+            if last_field is not None:
+                time_elapsed = datetime.datetime.now(pytz.utc) - last_time
+                days = time_elapsed.total_seconds() / (24 * 3600)
+                output.append((last_field, str(days)))
+
+            issue_dict["elapsed_time"] = str(output)
+            logging.info('time output: %s' % str(output))
 
             # Add the issue key and timestamp
             issue_dict['key'] = issue.key

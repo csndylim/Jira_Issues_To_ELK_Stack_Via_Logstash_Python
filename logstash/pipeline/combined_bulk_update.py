@@ -10,6 +10,7 @@ import logging
 import time
 import re
 import pytz
+import requests
 
 class JiraToElasticsearch:
     
@@ -104,12 +105,16 @@ class JiraToElasticsearch:
             for field_name in issue.raw['fields']:
                 issue_dict[field_name] = issue.raw['fields'][field_name]
     
+            # Extract time in status from Jira issue
+            tis_url = "http://"+ self.jira_host + ":" + self.jira_port + "/rest/tis/report/1.0/api/issue?issueKey=" + issue.key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
+            response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+            test = (response.content) # or do something else with the response data
+
             # Extract changelog from Jira issue
             for field_name in issue.raw['changelog']:
                 issue_dict[field_name] = issue.raw['changelog'][field_name]
 
             # Extract the time elapsed for each field
-
             last_time = None
             last_field = None
             last_id = None
@@ -119,9 +124,6 @@ class JiraToElasticsearch:
                     if 'toString' in item:
                         current_id = history['id']
                         current_value = item['toString']
-                        # current_time = datetime.datetime.strptime(issue_dict['histories'][0]['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
-                        # current_time = datetime.datetime.strptime(issue_dict['histories'][0]['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
-
                         current_time = self.parse_datetime_with_timezone(history['created'])
                         
                         if current_id != last_id and last_id is not None:
@@ -141,7 +143,6 @@ class JiraToElasticsearch:
 
             issue_dict["elapsed_time"] = str(output)
             logging.info('time output: %s' % str(output))
-
 
             # Add the issue key and timestamp
             issue_dict['key'] = issue.key
