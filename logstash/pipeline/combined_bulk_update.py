@@ -12,7 +12,7 @@ import requests
 
 class JiraToElasticsearch:
     
-    def __init__(self, jira_username, jira_password, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index):
+    def __init__(self, jira_username, jira_password, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, updated_date):
         self.jira_username = jira_username
         self.jira_password = jira_password
         self.jira_host = jira_host
@@ -26,6 +26,7 @@ class JiraToElasticsearch:
         self.elastic_index = elastic_index
         self.jira = None
         self.es = None
+        self.updated_date = updated_date
 
         # Set up logging
         logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -43,14 +44,9 @@ class JiraToElasticsearch:
             verify_certs=True
         )
         logging.info("Authenticated Elasticsearch with username: " + self.elastic_username + " and host: " + self.elastic_host + ":" + str(self.elastic_port))
-        
-    def _get_current_date(self):
-        yesterday = datetime.date.today() - datetime.timedelta(days = 1)
-        return str(yesterday.strftime('%Y-%m-%d'))
-        # return str(datetime.date.today().strftime('%Y-%m-%d')) 
 
     def get_updated_issues(self):
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() +  " AND status = DONE"
+        jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date +  " AND status = DONE"
         issues = self.jira.search_issues(jql_query)
         logging.info("Fetched " + str(len(issues)) + " issues from Jira with query: " + str(jql_query))
 
@@ -102,7 +98,7 @@ class JiraToElasticsearch:
             jql_query = "project = " + self.jira_issue + " AND status = DONE"
         else:
             # Specify project id
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self._get_current_date() + " AND status = DONE"
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
             
         # Get the issues
         start_at = 0
@@ -162,13 +158,13 @@ class JiraToElasticsearch:
 
             # Remove certain fields from the issue_dict
             self.remove_certain_fields(issue_dict)
-            
+
             # Index the Jira issues in Elasticsearch index
             self.es.index(index= self.elastic_index , body=json.dumps(issue_dict))
-
             # Log the successful upload
             logging.info('Successfully uploaded issue with key: %s' % issue.key)
 
+                
     def run(self, is_bulk):
         self.authenticate()
         if is_bulk == False: # If it is not a bulk upload, delete the old issues and append updated issues
@@ -188,7 +184,8 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host="elasticsearch",
     elastic_port=9200,
     elastic_scheme="http",
-    elastic_index ='jiratestv20-' + str(datetime.date.today().strftime('%Y-%m-%d'))
+    elastic_index ='jiratestv22-' + str(datetime.date.today().strftime('%Y-%m-%d')),
+    updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
 # Schedule the script
