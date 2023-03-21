@@ -8,8 +8,6 @@ import json
 import schedule
 import logging
 import time
-import re
-import pytz
 import requests
 
 class JiraToElasticsearch:
@@ -69,16 +67,35 @@ class JiraToElasticsearch:
             self.es.delete(index= self.elastic_index, doc_type='_doc', id= doc_id)
             logging.info("Deleted the issue key: " + issue_key + " with docid " + str(doc_id) + " from Elasticsearch index") 
 
-    def parse_datetime_with_timezone(self,dt_str):
-        # Parse the datetime string and the UTC offset separately
-        dt, tz_offset = re.match(r'(\d+-\d+-\d+T\d+:\d+:\d+\.\d+)(\+\d+)', dt_str).groups()
-        # Parse the UTC offset into hours and minutes
-        tz_hours = int(tz_offset[1:3])
-        tz_minutes = int(tz_offset[3:])
-        # Create the datetime object with the timezone information
-        dt = datetime.datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f')
-        dt_tz = pytz.utc.localize(dt + datetime.timedelta(hours=tz_hours, minutes=tz_minutes))
-        return dt_tz
+    def remove_certain_fields(self, d):
+        if isinstance(d, dict):
+            for k, v in d.copy().items():
+                if any(item in k.lower() for item in ("url", "self", "custom", ".keyword", "timezone")): #dont know why cannot remove keyword
+                    del d[k]
+                else:
+                    self.remove_certain_fields(v)
+        elif isinstance(d, list):
+            for i in d:
+                self.remove_certain_fields(i)
+
+    def retrieve_time_in_status(self,key):
+        # Extract time in status from Jira issue
+        tis_url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/tis/report/1.0/api/issue?issueKey=" + key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
+        response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+        json1 = json.loads(response.text) # or do something else with the response data
+
+        # Access the includedStatuses list and create a dictionary that maps id to name
+        status_dict = {status['id']: status['name'] for status in json1['includedStatuses']}
+        
+        # Loop through the valueColumns and currentState list in the body and replace the id with the corresponding name
+        for row in json1['table']['body']['rows']:
+            for value_column in row['valueColumns']:
+                value_column['id'] = status_dict[value_column['id']]
+            for current_state in row['currentState']:
+                current_state['id'] = status_dict[current_state['id']]    
+        
+        # Append this to issue_dict
+        return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
     def index_issues(self, max_results, is_bulk):
         if is_bulk == True:
@@ -91,7 +108,7 @@ class JiraToElasticsearch:
         start_at = 0
         issues = []
         while True:
-            results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results, expand='changelog')
+            results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
             if not results:
                 break
             issues += results
@@ -101,57 +118,53 @@ class JiraToElasticsearch:
         for issue in issues:
             issue_dict = {}
 
-            # Add the issue key and timestamp
-            issue_dict['key'] = issue.key
-            issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
             # Extract all fields from Jira issue
             for field_name in issue.raw['fields']:
                 issue_dict[field_name] = issue.raw['fields'][field_name]
-    
-            # Extract time in status from Jira issue
-            tis_url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/tis/report/1.0/api/issue?issueKey=" + issue.key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
-            response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
-            json1 = json.loads(response.text) # or do something else with the response data
+ 
+            # Extract the attachments from Jira issue
+            try:
+                # issue_dict['attachments'] =  issue.raw['fields']['attachment']
+                url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key
+                response = requests.get(url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+                issue_dict['attachments'] = json.loads(response.text)['fields']['attachment']
+            except:
+                issue_dict['attachments'] = []
+                logging.info('No attachments found for issue with key: %s' % issue.key)
+                 
+            # Extract the comments from Jira issue
+            try:
+                # issue_dict['comments'] = issue.raw['fields']['comment']['comments']
+                url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key + "/comment"
+                response = requests.get(url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+                issue_dict['comments'] = json.loads(response.text)["comments"]
+            except:
+                issue_dict['comments'] = []
+                logging.info('No comments found for issue with key: %s' % issue.key)
+                
+            # Extract the watchers from Jira issue
+            try:
+                url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key + "/watchers"
+                response = requests.get(url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
+                issue_dict['watchers'] = json.loads(response.text)["watchers"]
+            except:
+                issue_dict['watchers'] = []
+                logging.info('No watchers found for issue with key: %s' % issue.key)
 
-            # Access the includedStatuses list and create a dictionary that maps id to name
-            status_dict = {status['id']: status['name'] for status in json1['includedStatuses']}
-            
-            # Loop through the valueColumns and currentState list in the body and replace the id with the corresponding name
-            for row in json1['table']['body']['rows']:
-                for value_column in row['valueColumns']:
-                    value_column['id'] = status_dict[value_column['id']]
-                for current_state in row['currentState']:
-                    current_state['id'] = status_dict[current_state['id']]    
-            
-            # Append this to the original json
-            issue_dict['currentState'] = json1['table']['body']['rows'][0]['currentState']
-            issue_dict['pastState'] = json1['table']['body']['rows'][0]['valueColumns']
-                    
-            # Merge the 2 jsons
-            merged_json = json.dumps(issue_dict)
-            merged_json = json.loads(merged_json)
-        
-            # Remove some avatarURLS. unable to remove all for some reason..
-            merged_json.pop('issuetype', {}).pop('avatarUrl', None)
-            for field in merged_json:
-                if isinstance(merged_json[field], dict):
-                    merged_json[field] = {k:v for k,v in merged_json[field].items() if k != 'avatarUrls'}
-                    if 'fields' in merged_json[field]:
-                        for subfield in merged_json[field]['fields']:
-                            if isinstance(merged_json[field]['fields'][subfield], dict):
-                                merged_json[field]['fields'][subfield] = {k:v for k,v in merged_json[field]['fields'][subfield].items() if k != 'avatarUrls'}
-                            elif isinstance(merged_json[field]['fields'][subfield], list):
-                                for item in merged_json[field]['fields'][subfield]:
-                                    if isinstance(item, dict):
-                                        item.pop('avatarUrls', None)
-                elif isinstance(merged_json[field], list):
-                    for item in merged_json[field]:
-                        if isinstance(item, dict):
-                            item.pop('avatarUrls', None)
+            # Append the issue key and timestamp to the issue_dict
+            issue_dict['key'] = issue.key
+            issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
+            # Append the time in status to the issue_dict
+            currentState, pastState = self.retrieve_time_in_status(issue.key)
+            issue_dict['currentState'] = currentState
+            issue_dict['pastState'] = pastState
+
+            # Remove certain fields from the issue_dict
+            self.remove_certain_fields(issue_dict)
+            
             # Index the Jira issues in Elasticsearch index
-            self.es.index(index= self.elastic_index , body=json.dumps(merged_json))
+            self.es.index(index= self.elastic_index , body=json.dumps(issue_dict))
 
             # Log the successful upload
             logging.info('Successfully uploaded issue with key: %s' % issue.key)

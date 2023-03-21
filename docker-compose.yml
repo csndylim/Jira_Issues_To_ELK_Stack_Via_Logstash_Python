@@ -50,6 +50,7 @@ services:
     # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
     # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
     command: ["/usr/bin/python", "/usr/share/logstash/pipeline/combined_bulk_update.py"]
+    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
 
 
     volumes:
