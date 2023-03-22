@@ -80,7 +80,7 @@ Line 207 schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 
 ```
 
 ## 5. Remove or comment the first two lines of codes in `combined_bulk_update.py`.  (Optional)
-Both files are located in `logstash\pipeline` folder.
+The python file is located in `logstash\pipeline` folder.
 ```python
 import os
 os.system("python /usr/share/logstash/pipeline/installation.py")
