@@ -3,6 +3,7 @@ os.system("python /usr/share/logstash/pipeline/installation.py")
 
 from jira import JIRA
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
 import datetime
 import json
 import schedule
@@ -44,29 +45,11 @@ class JiraToElasticsearch:
             verify_certs=True
         )
         logging.info("Authenticated Elasticsearch with username: " + self.elastic_username + " and host: " + self.elastic_host + ":" + str(self.elastic_port))
-
-    def get_updated_issues(self):
-        jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date +  " AND status = DONE"
-        issues = self.jira.search_issues(jql_query)
-        logging.info("Fetched " + str(len(issues)) + " issues from Jira with query: " + str(jql_query))
-
-        issue_keys = [issue.key for issue in issues]
-        logging.info("These are the updated issues keys: " + str(issue_keys))
-        return issue_keys
-
-    def delete_old_issues(self,  issue_keys):
-        for issue_key in issue_keys:
-            search_body = { "query": { "match": { "key": issue_key } }}
-            result = self.es.search(index = self.elastic_index, body=search_body)
-
-            doc_id = result["hits"]["hits"][0]["_id"]
-            self.es.delete(index= self.elastic_index, doc_type='_doc', id= doc_id)
-            logging.info("Deleted the issue key: " + issue_key + " with docid " + str(doc_id) + " from Elasticsearch index") 
-
+       
     def remove_certain_fields(self, d):
         if isinstance(d, dict):
             for k, v in d.copy().items():
-                if any(item in k.lower() for item in ("url", "self", "custom", ".keyword", "timezone")): #dont know why cannot remove keyword
+                if any(item in k.lower() for item in ("url", "self", "custom", ".keyword", "timezone")): 
                     del d[k]
                 else:
                     self.remove_certain_fields(v)
@@ -93,15 +76,10 @@ class JiraToElasticsearch:
         # Append this to issue_dict
         return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
-    def index_issues(self, max_results, is_bulk):
-        if is_bulk == True:
-            jql_query = "project = " + self.jira_issue + " AND status = DONE"
-        else:
-            # Specify project id
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
-            
+    def retrieve_fields(self, jql_query):
         # Get the issues
         start_at = 0
+        max_results = 100
         issues = []
         while True:
             results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
@@ -110,6 +88,9 @@ class JiraToElasticsearch:
             issues += results
             start_at += max_results
 
+        # Prepare the bulk request body
+        issues_dicts = []
+        issues_keys = []
         # Run each document aka an issue in a loop
         for issue in issues:
             issue_dict = {}
@@ -159,18 +140,47 @@ class JiraToElasticsearch:
             # Remove certain fields from the issue_dict
             self.remove_certain_fields(issue_dict)
 
-            # Index the Jira issues in Elasticsearch index
-            self.es.index(index= self.elastic_index , body=json.dumps(issue_dict))
-            # Log the successful upload
-            logging.info('Successfully uploaded issue with key: %s' % issue.key)
+            # Append the issue_dict to the list of issues
+            issues_dicts.append(issue_dict)
+            # Append the issue key to the list of issue keys
+            issues_keys.append(issue.key)
 
-                
-    def run(self, is_bulk):
-        self.authenticate()
-        if is_bulk == False: # If it is not a bulk upload, delete the old issues and append updated issues
-            issue_keys = self.get_updated_issues()
-            self.delete_old_issues(issue_keys)
-        self.index_issues(max_results = 100,is_bulk = is_bulk) 
+        return issues_keys, issues_dicts
+    
+    def index_issues(self, is_update):
+        if is_update == False:
+            jql_query = "project = " + self.jira_issue + " AND status = DONE"       
+        else:
+            # Specify project id
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
+
+        # Retrieve the issues
+        issues_keys, issue_dicts = self.retrieve_fields(jql_query)
+        
+        ingest_issues_bulk = [] # List of issues to be indexed
+        for i in range (len(issues_keys)):
+            if is_update == False:
+                # Prepare the index request body
+                ingest_issues_bulk.append({
+                    '_index': self.elastic_index,
+                    '_id': issues_keys[i],
+                    '_source': json.dumps(issue_dicts[i])
+                })
+            else:
+                # Prepare the update request body
+                ingest_issues_bulk.append({
+                    '_op_type': 'update',
+                    '_index': self.elastic_index,
+                    '_id': issues_keys[i],
+                    'doc': issue_dicts[i]
+                })
+
+        # Use `bulk` function to index the issues in Elasticsearch
+        bulk(self.es, ingest_issues_bulk, index=self.elastic_index)
+        if is_update == False:
+            logging.info("Indexed the following issues keys: " + str(issues_keys))
+        else:
+            logging.info("Updated the following issues keys: " + str(issues_keys))
 
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
@@ -184,15 +194,17 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host="elasticsearch",
     elastic_port=9200,
     elastic_scheme="http",
-    elastic_index ='jiratestv22-' + str(datetime.date.today().strftime('%Y-%m-%d')),
+    elastic_index ='jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
 # Schedule the script
-# schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_bulk=False)
-jira_to_elastic.run(is_bulk = True)
+# schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update=False)
+jira_to_elastic.authenticate()
+jira_to_elastic.index_issues(is_update = False)
 
-schedule.every(60).seconds.do(jira_to_elastic.run, is_bulk=False)
+schedule.every(60).seconds.do(jira_to_elastic.index_issues, is_update = True)
+schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 
 # Keep running the scheduled job
 while True:
