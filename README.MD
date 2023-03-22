@@ -1,4 +1,4 @@
-# Ingestion of Jira issues from Jira Service Management into Elasticsearch-Logstash-Kibana (ELK) Stack via Logstash-Python
+# Ingestion of Jira issues from Jira Service Management into Elasticsearch via Logstash-Python
 
 ## 0. Clone this repository
 FYI, these are the versions being used. Any version can work. Just change the versions inside the `docker-compose.yaml` file for containers, and `installation.py` for python
@@ -65,21 +65,21 @@ The output on command line should look something like this with all 4 containers
  - Container elk_logstash       Started                                                                            6.4s
 ```
 
-## 3. Run the first batch of jira issues from Jira Service Management to ELK
-In `docker-compose.yaml`, comment line 51 and uncomment 50
-```bash
-Line 50  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 51 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+## 3. Run the first batch of jira issues from Jira Service Management to Elasticsearch in `combined_bulk_update.py`
+```python
+Line 201 jira_to_elastic.authenticate()
+Line 202 jira_to_elastic.ingest_issues_to_elasticsearch(is_update = False)
 ```
 
-## 4. Update the jira issues that are updated in Jira Service Management on ELK
-In `docker-compose.yaml`, comment line 50 and uncomment 51
-```bash
-Line 50 # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-Line 51  command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+## 4. Schedule to update the jira issues that are updated in Jira Service Management on Elasticsearch at every 60 seconds, and authenticate the credentials of Jira Service Management, and Elasticsearch at every 5 hours in `combined_bulk_update.py`
+Feel free to change to any n type of time.
+```python
+Line 205 # schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
+Line 206 schedule.every(60).seconds.do(jira_to_elastic.ingest_issues_to_elasticsearch, is_update = True)
+Line 207 schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 ```
 
-## 5. Remove or comment the first two lines of codes in `initial_commit.py` and `delete_update.py`.  (Optional)
+## 5. Remove or comment the first two lines of codes in `combined_bulk_update.py`.  (Optional)
 Both files are located in `logstash\pipeline` folder.
 ```python
 import os
