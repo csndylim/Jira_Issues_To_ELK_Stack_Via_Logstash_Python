@@ -57,7 +57,7 @@ class JiraToElasticsearch:
             for i in d:
                 self.remove_certain_fields(i)
 
-    def retrieve_time_in_status(self,key):
+    def retrieve_time_in_status_from_jira(self,key):
         # Extract time in status from Jira issue
         tis_url = "http://"+ self.jira_host + ":" + str (self.jira_port) + "/rest/tis/report/1.0/api/issue?issueKey=" + key + "&columnsBy=statusDuration&outputType=json&calendar=normalHours&viewFormat=humanReadable"
         response = requests.get(tis_url, auth=(self.jira_username, self.jira_password), headers={'Content-Type': 'application/json'})
@@ -76,7 +76,7 @@ class JiraToElasticsearch:
         # Append this to issue_dict
         return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
-    def retrieve_fields(self, jql_query):
+    def retrieve_fields_from_jira(self, jql_query):
         # Get the issues
         start_at = 0
         max_results = 100
@@ -128,12 +128,11 @@ class JiraToElasticsearch:
                 issue_dict['watchers'] = []
                 logging.info('No watchers found for issue with key: %s' % issue.key)
 
-            # Append the issue key and timestamp to the issue_dict
-            issue_dict['key'] = issue.key
+            # Append the timestamp to the issue_dict
             issue_dict['timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
             # Append the time in status to the issue_dict
-            currentState, pastState = self.retrieve_time_in_status(issue.key)
+            currentState, pastState = self.retrieve_time_in_status_from_jira(issue.key)
             issue_dict['currentState'] = currentState
             issue_dict['pastState'] = pastState
 
@@ -147,7 +146,7 @@ class JiraToElasticsearch:
 
         return issues_keys, issues_dicts
     
-    def index_issues(self, is_update):
+    def ingest_issues_to_elasticsearch(self, is_update):
         if is_update == False:
             jql_query = "project = " + self.jira_issue + " AND status = DONE"       
         else:
@@ -155,7 +154,7 @@ class JiraToElasticsearch:
             jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
 
         # Retrieve the issues
-        issues_keys, issue_dicts = self.retrieve_fields(jql_query)
+        issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
         
         ingest_issues_bulk = [] # List of issues to be indexed
         for i in range (len(issues_keys)):
@@ -198,12 +197,13 @@ jira_to_elastic = JiraToElasticsearch(
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
-# Schedule the script
-# schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update=False)
+# Start running from here
 jira_to_elastic.authenticate()
-jira_to_elastic.index_issues(is_update = False)
+jira_to_elastic.ingest_issues_to_elasticsearch(is_update = False)
 
-schedule.every(60).seconds.do(jira_to_elastic.index_issues, is_update = True)
+# Schedule the script to run every n type of time
+# schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
+schedule.every(60).seconds.do(jira_to_elastic.ingest_issues_to_elasticsearch, is_update = True)
 schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 
 # Keep running the scheduled job
