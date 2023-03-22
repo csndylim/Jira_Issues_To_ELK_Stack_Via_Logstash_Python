@@ -139,48 +139,50 @@ class JiraToElasticsearch:
             # Remove certain fields from the issue_dict
             self.remove_certain_fields(issue_dict)
 
-            # Append the issue_dict to the list of issues
+            # Append the issue_dict and issue_key to the respective lists for bulk indexing
             issues_dicts.append(issue_dict)
-            # Append the issue key to the list of issue keys
             issues_keys.append(issue.key)
 
         return issues_keys, issues_dicts
     
     def ingest_issues_to_elasticsearch(self, is_update):
+        ingest_issues_bulk = [] # List of issues to be indexed
+        
         if is_update == False:
             jql_query = "project = " + self.jira_issue + " AND status = DONE"       
-        else:
-            # Specify project id
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
-
-        # Retrieve the issues
-        issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
-        
-        ingest_issues_bulk = [] # List of issues to be indexed
-        for i in range (len(issues_keys)):
-            if is_update == False:
-                # Prepare the index request body
+            
+            # Retrieve the issues
+            issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
+            
+            # Prepare the index request body
+            for i in range (len(issues_keys)):
                 ingest_issues_bulk.append({
                     '_index': self.elastic_index,
                     '_id': issues_keys[i],
                     '_source': json.dumps(issue_dicts[i])
                 })
-            else:
-                # Prepare the update request body
+            ingest_type = "Indexed"
+        else:
+            # Specify project id
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
+            
+            # Retrieve the issues
+            issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
+            
+            # Prepare the index request body
+            for i in range (len(issues_keys)):
                 ingest_issues_bulk.append({
-                    '_op_type': 'update',
+                      '_op_type': 'update',
                     '_index': self.elastic_index,
                     '_id': issues_keys[i],
                     'doc': issue_dicts[i]
                 })
-
+            ingest_type = "Updated"
+        
         # Use `bulk` function to index the issues in Elasticsearch
         bulk(self.es, ingest_issues_bulk, index=self.elastic_index)
-        if is_update == False:
-            logging.info("Indexed the following issues keys: " + str(issues_keys))
-        else:
-            logging.info("Updated the following issues keys: " + str(issues_keys))
-
+        logging.info(ingest_type + " the following issues keys: " + str(issues_keys))
+       
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
     jira_username="admin",
