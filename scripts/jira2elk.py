@@ -13,11 +13,12 @@ import requests
 
 class JiraToElasticsearch:
 
-    def __init__(self, jira_token, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, updated_date):
+    def __init__(self, jira_token, jira_host, jira_port, jira_issue, jira_max_results, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, created_date, updated_date):
         self.jira_token = jira_token
         self.jira_host = jira_host
         self.jira_port = jira_port
         self.jira_issue = jira_issue
+        self.jira_max_results = jira_max_results
         self.elastic_username = elastic_username
         self.elastic_password = elastic_password
         self.elastic_host = elastic_host
@@ -26,6 +27,7 @@ class JiraToElasticsearch:
         self.elastic_index = elastic_index
         self.jira = None
         self.es = None
+        self.created_date = created_date
         self.updated_date = updated_date
 
         # Set up logging
@@ -82,7 +84,7 @@ class JiraToElasticsearch:
 
         # Get the issues through looping
         start_at = 0
-        max_results = 20
+        max_results = self.jira_max_results
 
         while True:
             results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
@@ -130,8 +132,7 @@ class JiraToElasticsearch:
         ingest_issues_bulk = [] # List of issues to be indexed
         
         if is_update == False:
-            two_months_ago = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d'))  
-            jql_query = "project = " + self.jira_issue + " AND created >= " + two_months_ago + " AND status = DONE"
+            jql_query = "project = " + self.jira_issue + " AND created >= " + self.created_date + " AND status = DONE"
     
             # Retrieve the issues
             issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
@@ -174,12 +175,14 @@ jira_to_elastic = JiraToElasticsearch(
     jira_host = os.environ.get('JIRA_HOST'),
     jira_port = int(os.environ.get('JIRA_PORT')),
     jira_issue = "TEST",
+    jira_max_results = 20, # to increase to 1000
     elastic_username = os.environ.get('ELASTIC_USR'),
     elastic_password = os.environ.get('ELASTIC_PWD'),
     elastic_host = os.environ.get('ELASTIC_HOST'),
     elastic_port = int(os.environ.get('ELASTIC_PORT')),
     elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
     elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
+    created_date = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
