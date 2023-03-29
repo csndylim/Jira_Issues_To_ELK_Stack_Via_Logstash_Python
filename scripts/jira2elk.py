@@ -1,4 +1,5 @@
-# import os
+import os
+from dotenv import load_dotenv
 # os.system("python -m pip install schedule jira elasticsearch requests")
 from jira import JIRA
 from elasticsearch import Elasticsearch
@@ -130,7 +131,7 @@ class JiraToElasticsearch:
         
         if is_update == False:
             two_months_ago = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d'))  
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + two_months_ago + " AND status = DONE"
+            jql_query = "project = " + self.jira_issue + " AND created >= " + two_months_ago + " AND status = DONE"
     
             # Retrieve the issues
             issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
@@ -163,18 +164,21 @@ class JiraToElasticsearch:
         # Use `bulk` function to index the issues in Elasticsearch
         bulk(self.es, ingest_issues_bulk, index=self.elastic_index)
         logging.info(ingest_type + " the following issues keys: " + str(issues_keys) + " into  index " + self.elastic_index)
-       
+
+# Load the environment variables
+load_dotenv()
+
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
-    jira_token = "",
-    jira_host = "http://jira",
-    jira_port = 8080,
+    jira_token = os.environ.get('JIRA_TOKEN'),
+    jira_host = os.environ.get('JIRA_HOST'),
+    jira_port = int(os.environ.get('JIRA_PORT')),
     jira_issue = "TEST",
-    elastic_username = "elastic",
-    elastic_password = "P@$$w0rd",
-    elastic_host = "elasticsearch", 
-    elastic_port = 9200,
-    elastic_scheme = "http",
+    elastic_username = os.environ.get('ELASTIC_USR'),
+    elastic_password = os.environ.get('ELASTIC_PWD'),
+    elastic_host = os.environ.get('ELASTIC_HOST'),
+    elastic_port = int(os.environ.get('ELASTIC_PORT')),
+    elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
     elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
