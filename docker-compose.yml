@@ -10,6 +10,7 @@ services:
       - "ES_JAVA_OPTS=-Xms384m -Xmx384m"
       - ELASTIC_USERNAME=${ELASTIC_USR}
       - ELASTIC_PASSWORD=${ELASTIC_PWD}
+      - xpack.security.authc.api_key.enabled = true
       - xpack.security.enabled=true
       - node.name=${ELASTIC_HOST}
       - cluster.name=elk-cluster
@@ -31,36 +32,36 @@ services:
     restart: "no"
     mem_limit: 1g
 
-  logstash:
-    image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
-    container_name: elk_${LOGSTASH_HOST}
-    hostname: ${LOGSTASH_HOST}
-    networks:
-      - elk_stack
-    environment:
-        - "LS_JAVA_OPTS=-Xms256m -Xmx256m"  #  \"every\" => \"20s\"
-        - xpack.security.enabled=true
-    ports:
-      - 5044:5044     # beats
-      - 5000:5000/tcp # logstash
-      - 5000:5000/udp # logstash
-      - 9600:9600     # logstash monitoring port
+  # logstash:
+  #   image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
+  #   container_name: elk_${LOGSTASH_HOST}
+  #   hostname: ${LOGSTASH_HOST}
+  #   networks:
+  #     - elk_stack
+  #   environment:
+  #       - "LS_JAVA_OPTS=-Xms256m -Xmx256m"  #  \"every\" => \"20s\"
+  #       - xpack.security.enabled=true
+  #   ports:
+  #     - 5044:5044     # beats
+  #     - 5000:5000/tcp # logstash
+  #     - 5000:5000/udp # logstash
+  #     - 9600:9600     # logstash monitoring port
 
-    # command: logstash -f /usr/share/logstash/pipeline/logstash.conf # not needed
-    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
-    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
-    command: ["/usr/bin/python", "/usr/share/logstash/pipeline/combined_bulk_update.py"]
-    # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
+  #   # command: logstash -f /usr/share/logstash/pipeline/logstash.conf # not needed
+  #   # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/initial_commit.py"]
+  #   # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/delete_update.py"]
+  #   command: ["/usr/bin/python", "/usr/share/logstash/pipeline/combined_bulk_update.py"]
+  #   # command: ["/usr/bin/python", "/usr/share/logstash/pipeline/installation.py"]
 
 
-    volumes:
-      - ./logstash/pipeline:/usr/share/logstash/pipeline
+  #   volumes:
+  #     - ./logstash/pipeline:/usr/share/logstash/pipeline
 
-    restart: "no"
-    depends_on:
-      - elasticsearch
-      - jira
-    mem_limit: 1g
+  #   restart: "no"
+  #   depends_on:
+  #     - elasticsearch
+  #     - jira
+  #   mem_limit: 1g
 
   kibana:
     container_name: elk_${KIBANA_HOST}
@@ -73,6 +74,7 @@ services:
       - ELASTICSEARCH_USERNAME=${ELASTIC_USR}
       - ELASTICSEARCH_PASSWORD=${ELASTIC_PWD}
       - XPACK_SECURITY_ENABLED=true
+      - xpack.security.authc.api_key.enabled = true
     networks:
       - elk_stack
     ports:
@@ -81,6 +83,20 @@ services:
     depends_on:
       - elasticsearch
     mem_limit: 1g
+
+  jira-elk:
+    image: python:3-slim
+    container_name: jira-elk
+    networks:
+      - elk_stack
+    volumes:
+      - ./scripts:/usr/src/scripts
+    command: ["python", "-u", "/usr/src/scripts/jira2elk.py"]
+    labels:
+      name: "jira-elk"
+      version: "3.11"
+    environment:
+      - PYTHONUNBUFFERED=1
 
 
   jira:

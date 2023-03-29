@@ -1,6 +1,5 @@
-import os
-os.system("python /usr/share/logstash/pipeline/installation.py")
-
+# import os
+# os.system("python -m pip install schedule jira elasticsearch requests")
 from jira import JIRA
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -12,7 +11,7 @@ import time
 import requests
 
 class JiraToElasticsearch:
-    
+
     def __init__(self, jira_token, jira_host, jira_port, jira_issue, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, updated_date):
         self.jira_token = jira_token
         self.jira_host = jira_host
@@ -76,71 +75,53 @@ class JiraToElasticsearch:
         return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
     def retrieve_fields_from_jira(self, jql_query):
-        # Get the issues
+        # Prepare the bulk request body
+        issues_dicts = []
+        issues_keys = []
+
+        # Get the issues through looping
         start_at = 0
-        max_results = 100
-        issues = []
+        max_results = 20
+
         while True:
             results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
             if not results:
                 break
-            issues += results
+
+            logging.info("Extracting from issue no. " + str(start_at) + " to " + str(start_at + max_results) )
             start_at += max_results
+     
+            # Run each document aka an issue in a loop
+            for issue in results:
+                issue_dict = {}
 
-        # Prepare the bulk request body
-        issues_dicts = []
-        issues_keys = []
-        # Run each document aka an issue in a loop
-        for issue in issues:
-            issue_dict = {}
+                # Extract all fields from Jira issue
+                for field_name in issue.raw['fields']:
+                    issue_dict['jira.' + field_name] = issue.raw['fields'][field_name]
+    
+                # Extract the watchers from Jira issue
+                try:
+                    url = ""+ self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key + "/watchers"
+                    response = requests.get(url, headers = { "Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer " + self.jira_token })
+                    issue_dict['jira.watchers'] = json.loads(response.text)["watchers"]
+                except:
+                    issue_dict['jira.watchers'] = []
+                    logging.info('No watchers found for issue with key: %s' % issue.key)
 
-            # Extract all fields from Jira issue
-            for field_name in issue.raw['fields']:
-                issue_dict['jira.' + field_name] = issue.raw['fields'][field_name]
- 
-            # Extract the attachments from Jira issue
-            try:
-                # issue_dict['jira.attachments'] =  issue.raw['fields']['attachment']
-                url = self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key
-                response = requests.get(url, headers = { "Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer " + self.jira_token })
-                issue_dict['jira.attachments'] = json.loads(response.text)['fields']['attachment']
-            except:
-                issue_dict['jira.attachments'] = []
-                logging.info('No attachments found for issue with key: %s' % issue.key)
-                 
-            # Extract the comments from Jira issue
-            try:
-                # issue_dict['jira.comments'] = issue.raw['fields']['comment']['comments']
-                url = self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key + "/comment"
-                response = requests.get(url, headers = { "Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer " + self.jira_token })
-                issue_dict['jira.comments'] = json.loads(response.text)["comments"]
-            except:
-                issue_dict['jira.comments'] = []
-                logging.info('No comments found for issue with key: %s' % issue.key)
-                
-            # Extract the watchers from Jira issue
-            try:
-                url = ""+ self.jira_host + ":" + str (self.jira_port) + "/rest/api/2/issue/" + issue.key + "/watchers"
-                response = requests.get(url, headers = { "Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer " + self.jira_token })
-                issue_dict['jira.watchers'] = json.loads(response.text)["watchers"]
-            except:
-                issue_dict['jira.watchers'] = []
-                logging.info('No watchers found for issue with key: %s' % issue.key)
+                # Append the timestamp to the issue_dict
+                issue_dict['jira.timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-            # Append the timestamp to the issue_dict
-            issue_dict['jira.timestamp']  = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                # Append the time in status to the issue_dict
+                currentState, pastState = self.retrieve_time_in_status_from_jira(issue.key)
+                issue_dict['jira.currentState'] = currentState
+                issue_dict['jira.pastState'] = pastState
 
-            # Append the time in status to the issue_dict
-            currentState, pastState = self.retrieve_time_in_status_from_jira(issue.key)
-            issue_dict['jira.currentState'] = currentState
-            issue_dict['jira.pastState'] = pastState
+                # Remove certain fields from the issue_dict
+                self.remove_certain_fields(issue_dict)
 
-            # Remove certain fields from the issue_dict
-            self.remove_certain_fields(issue_dict)
-
-            # Append the issue_dict and issue_key to the respective lists for bulk indexing
-            issues_dicts.append(issue_dict)
-            issues_keys.append(issue.key)
+                # Append the issue_dict and issue_key to the respective lists for bulk indexing
+                issues_dicts.append(issue_dict)
+                issues_keys.append(issue.key)
 
         return issues_keys, issues_dicts
     
@@ -148,8 +129,9 @@ class JiraToElasticsearch:
         ingest_issues_bulk = [] # List of issues to be indexed
         
         if is_update == False:
-            jql_query = "project = " + self.jira_issue + " AND status = DONE"       
-            
+            two_months_ago = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d'))  
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + two_months_ago + " AND status = DONE"
+    
             # Retrieve the issues
             issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
             
@@ -180,7 +162,7 @@ class JiraToElasticsearch:
         
         # Use `bulk` function to index the issues in Elasticsearch
         bulk(self.es, ingest_issues_bulk, index=self.elastic_index)
-        logging.info(ingest_type + " the following issues keys: " + str(issues_keys))
+        logging.info(ingest_type + " the following issues keys: " + str(issues_keys) + " into  index " + self.elastic_index)
        
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
@@ -193,7 +175,7 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host = "elasticsearch", 
     elastic_port = 9200,
     elastic_scheme = "http",
-    elastic_index = 'jiratestv25-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
+    elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
@@ -203,10 +185,10 @@ jira_to_elastic.ingest_issues_to_elasticsearch(is_update = False)
 
 # Schedule the script to run every n type of time
 # schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
-schedule.every(60).seconds.do(jira_to_elastic.ingest_issues_to_elasticsearch, is_update = True)
-schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
+# schedule.every(60).seconds.do(jira_to_elastic.ingest_issues_to_elasticsearch, is_update = True)
+# schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 
-# Keep running the scheduled job
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+# # Keep running the scheduled job
+# while True:
+#     schedule.run_pending()
+#     time.sleep(1)
