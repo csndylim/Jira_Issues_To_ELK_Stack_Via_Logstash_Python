@@ -10,7 +10,7 @@ services:
       - "ES_JAVA_OPTS=-Xms384m -Xmx384m"
       - ELASTIC_USERNAME=${ELASTIC_USR}
       - ELASTIC_PASSWORD=${ELASTIC_PWD}
-      - xpack.security.authc.api_key.enabled = true
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY = ${ELASTIC_ENCRYPTIONKEY}
       - xpack.security.enabled=true
       - node.name=${ELASTIC_HOST}
       - cluster.name=elk-cluster
@@ -73,7 +73,9 @@ services:
       - SERVER_NAME=${KIBANA_HOST}
       - ELASTICSEARCH_USERNAME=${ELASTIC_USR}
       - ELASTICSEARCH_PASSWORD=${ELASTIC_PWD}
-      - XPACK_SECURITY_ENABLED=true
+      - xpack.security.enabled=true
+      - xpack.encryptedSavedObjects.encryptionKey = ${ELASTIC_ENCRYPTIONKEY}
+      - xpack.security.encryptionKey = ${ELASTIC_ENCRYPTIONKEY}
       - xpack.security.authc.api_key.enabled = true
     networks:
       - elk_stack

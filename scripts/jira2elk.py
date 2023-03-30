@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-# os.system("python -m pip install schedule jira elasticsearch requests")
+# os.system("python -m pip install schedule jira elasticsearch requests python-dotenv")
 from jira import JIRA
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -77,10 +77,12 @@ class JiraToElasticsearch:
         # Append this to issue_dict
         return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
-    def retrieve_fields_from_jira(self, jql_query):
-        # Prepare the bulk request body
-        issues_dicts = []
-        issues_keys = []
+    def retrieve_fields_from_jira(self, is_update):
+        # Specify the JQL query
+        if is_update == False:
+            jql_query = "project = " + self.jira_issue + " AND created >= " + self.created_date + " AND status = DONE"
+        else:
+            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
 
         # Get the issues through looping
         start_at = 0
@@ -90,10 +92,13 @@ class JiraToElasticsearch:
             results = self.jira.search_issues(jql_query, startAt=start_at, maxResults=max_results)
             if not results:
                 break
-
             logging.info("Extracting from issue no. " + str(start_at) + " to " + str(start_at + max_results) )
             start_at += max_results
-     
+
+            # Prepare the bulk request body
+            issues_dicts = []
+            issues_keys = []
+
             # Run each document aka an issue in a loop
             for issue in results:
                 issue_dict = {}
@@ -126,39 +131,28 @@ class JiraToElasticsearch:
                 issues_dicts.append(issue_dict)
                 issues_keys.append(issue.key)
 
-        return issues_keys, issues_dicts
+            self.ingest_issues_to_elasticsearch(issues_dicts, issues_keys, is_update)
     
-    def ingest_issues_to_elasticsearch(self, is_update):
+    def ingest_issues_to_elasticsearch(self, issues_dicts, issues_keys, is_update):
         ingest_issues_bulk = [] # List of issues to be indexed
         
         if is_update == False:
-            jql_query = "project = " + self.jira_issue + " AND created >= " + self.created_date + " AND status = DONE"
-    
-            # Retrieve the issues
-            issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
-            
             # Prepare the index request body
             for i in range (len(issues_keys)):
                 ingest_issues_bulk.append({
                     '_index': self.elastic_index,
                     '_id': issues_keys[i],
-                    '_source': json.dumps(issue_dicts[i])
+                    '_source': json.dumps(issues_dicts[i])
                 })
             ingest_type = "Indexed"
         else:
-            # Specify project id
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
-            
-            # Retrieve the issues
-            issues_keys, issue_dicts = self.retrieve_fields_from_jira(jql_query)
-            
             # Prepare the index request body
             for i in range (len(issues_keys)):
                 ingest_issues_bulk.append({
                       '_op_type': 'update',
                     '_index': self.elastic_index,
                     '_id': issues_keys[i],
-                    'doc': issue_dicts[i]
+                    'doc': issues_dicts[i]
                 })
             ingest_type = "Updated"
         
@@ -175,20 +169,20 @@ jira_to_elastic = JiraToElasticsearch(
     jira_host = os.environ.get('JIRA_HOST'),
     jira_port = int(os.environ.get('JIRA_PORT')),
     jira_issue = "TEST",
-    jira_max_results = 20, # to increase to 1000
+    jira_max_results = 3, # to increase to 1000
     elastic_username = os.environ.get('ELASTIC_USR'),
     elastic_password = os.environ.get('ELASTIC_PWD'),
     elastic_host = os.environ.get('ELASTIC_HOST'),
     elastic_port = int(os.environ.get('ELASTIC_PORT')),
     elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
-    elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
+    elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d')),
     created_date = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
 )
 
 # Start running from here
 jira_to_elastic.authenticate()
-jira_to_elastic.ingest_issues_to_elasticsearch(is_update = False)
+jira_to_elastic.retrieve_fields_from_jira(is_update = False)
 
 # Schedule the script to run every n type of time
 # schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
