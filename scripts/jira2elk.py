@@ -13,11 +13,11 @@ import requests
 
 class JiraToElasticsearch:
 
-    def __init__(self, jira_token, jira_host, jira_port, jira_issue, jira_max_results, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, created_date, updated_date):
+    def __init__(self, jira_token, jira_host, jira_port, jira_project, jira_max_results, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, created_date, updated_date):
         self.jira_token = jira_token
         self.jira_host = jira_host
         self.jira_port = jira_port
-        self.jira_issue = jira_issue
+        self.jira_project = jira_project
         self.jira_max_results = jira_max_results
         self.elastic_username = elastic_username
         self.elastic_password = elastic_password
@@ -80,9 +80,9 @@ class JiraToElasticsearch:
     def retrieve_fields_from_jira(self, is_update):
         # Specify the JQL query
         if is_update == False:
-            jql_query = "project = " + self.jira_issue + " AND created >= " + self.created_date + " AND status = DONE"
+            jql_query = "project = " + self.jira_project + " AND created >= " + self.created_date + " AND status = DONE"
         else:
-            jql_query = "project = " + self.jira_issue + " AND updated >= " + self.updated_date + " AND status = DONE"
+            jql_query = "project = " + self.jira_project + " AND updated >= " + self.updated_date + " AND status = DONE"
 
         # Get the issues through looping
         start_at = 0
@@ -168,8 +168,8 @@ jira_to_elastic = JiraToElasticsearch(
     jira_token = os.environ.get('JIRA_TOKEN'),
     jira_host = os.environ.get('JIRA_HOST'),
     jira_port = int(os.environ.get('JIRA_PORT')),
-    jira_issue = "TEST",
-    jira_max_results = 3, # to increase to 1000
+    jira_project = "TEST",
+    jira_max_results = 3, # to increase to 20000
     elastic_username = os.environ.get('ELASTIC_USR'),
     elastic_password = os.environ.get('ELASTIC_PWD'),
     elastic_host = os.environ.get('ELASTIC_HOST'),
@@ -186,7 +186,7 @@ jira_to_elastic.retrieve_fields_from_jira(is_update = False)
 
 # Schedule the script to run every n type of time
 # schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
-# schedule.every(60).seconds.do(jira_to_elastic.ingest_issues_to_elasticsearch, is_update = True)
+# schedule.every(60).seconds.do(jira_to_elastic.retrieve_fields_from_jira, is_update = True)
 # schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 
 # # Keep running the scheduled job
