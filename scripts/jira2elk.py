@@ -13,14 +13,14 @@ import requests
 
 class JiraToElasticsearch:
 
-    def __init__(self, jira_token, jira_host, jira_port, jira_project, jira_max_results, elastic_username, elastic_password, elastic_host, elastic_port, elastic_scheme,elastic_index, created_date, updated_date):
+    def __init__(self, jira_token, jira_host, jira_port, jira_project, jira_max_results, elastic_token_id, elastic_token_key, elastic_host, elastic_port, elastic_scheme,elastic_index, created_date, updated_date):
         self.jira_token = jira_token
         self.jira_host = jira_host
         self.jira_port = jira_port
         self.jira_project = jira_project
         self.jira_max_results = jira_max_results
-        self.elastic_username = elastic_username
-        self.elastic_password = elastic_password
+        self.elastic_token_id = elastic_token_id
+        self.elastic_token_key = elastic_token_key
         self.elastic_host = elastic_host
         self.elastic_port = elastic_port
         self.elastic_scheme = elastic_scheme
@@ -39,13 +39,11 @@ class JiraToElasticsearch:
         self.jira = JIRA(options, token_auth=self.jira_token)
         logging.info("Authenticated Jira using api token on " + self.jira_host + ":" + str(self.jira_port)) 
 
-        # Set up Elasticsearch
         self.es = Elasticsearch(
             [{'host': self.elastic_host, 'port': self.elastic_port, 'scheme': self.elastic_scheme}],
-            http_auth=(self.elastic_username, self.elastic_password),
-            verify_certs=True
+            api_key=(self.elastic_token_id, self.elastic_token_key)
         )
-        logging.info("Authenticated Elasticsearch with username: " + self.elastic_username + " and host: " + self.elastic_host + ":" + str(self.elastic_port))
+        logging.info("Authenticated Elasticsearch using api token on  " + self.elastic_host + ":" + str(self.elastic_port))
        
     def remove_certain_fields(self, d):
         if isinstance(d, dict):
@@ -170,8 +168,8 @@ jira_to_elastic = JiraToElasticsearch(
     jira_port = int(os.environ.get('JIRA_PORT')),
     jira_project = "TEST",
     jira_max_results = 3, # to increase to 20000
-    elastic_username = os.environ.get('ELASTIC_USR'),
-    elastic_password = os.environ.get('ELASTIC_PWD'),
+    elastic_token_id = os.environ.get('ELASTIC_TOKEN_ID'),
+    elastic_token_key = os.environ.get('ELASTIC_TOKEN_KEY'),
     elastic_host = os.environ.get('ELASTIC_HOST'),
     elastic_port = int(os.environ.get('ELASTIC_PORT')),
     elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
