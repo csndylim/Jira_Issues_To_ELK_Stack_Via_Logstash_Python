@@ -30,9 +30,6 @@ class JiraToElasticsearch:
         self.created_date = created_date
         self.updated_date = updated_date
 
-        # Set up logging
-        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
-
     def authenticate(self):
         # Set up Jira
         options = {'server': '{}:{}'.format(self.jira_host, self.jira_port)}
@@ -76,6 +73,9 @@ class JiraToElasticsearch:
         return json1['table']['body']['rows'][0]['currentState'], json1['table']['body']['rows'][0]['valueColumns']
 
     def retrieve_fields_from_jira(self, is_update):
+        # Start the timer
+        start_time_script = time.time()
+
         # Specify the JQL query
         if is_update == False:
             jql_query = "project = " + self.jira_project + " AND created >= " + self.created_date + " AND status = DONE"
@@ -130,6 +130,7 @@ class JiraToElasticsearch:
                 issues_keys.append(issue.key)
 
             self.ingest_issues_to_elasticsearch(issues_dicts, issues_keys, is_update)
+        logging.info("Time taken to run the ingestion from jira to elk: " + str(datetime.timedelta(seconds=(time.time() - start_time_script))) + "\n")
     
     def ingest_issues_to_elasticsearch(self, issues_dicts, issues_keys, is_update):
         ingest_issues_bulk = [] # List of issues to be indexed
@@ -156,10 +157,11 @@ class JiraToElasticsearch:
         
         # Use `bulk` function to index the issues in Elasticsearch
         bulk(self.es, ingest_issues_bulk, index=self.elastic_index)
-        logging.info(ingest_type + " the following issues keys: " + str(issues_keys) + " into  index " + self.elastic_index)
+        logging.info(ingest_type + " the following issues keys: " + str(issues_keys) + " into index " + self.elastic_index)
 
-# Load the environment variables
+# Load the environment variables and set up logging
 load_dotenv()
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
@@ -173,9 +175,9 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host = os.environ.get('ELASTIC_HOST'),
     elastic_port = int(os.environ.get('ELASTIC_PORT')),
     elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
-    elastic_index = 'jiratestv24-' + str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d')),
+    elastic_index = 'jiratestv25-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
     created_date = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d')),
-    updated_date = str((datetime.date.today() - datetime.timedelta(days = 1)).strftime('%Y-%m-%d'))
+    updated_date = str((datetime.date.today() - datetime.timedelta(days = 30)).strftime('%Y-%m-%d'))
 )
 
 # Start running from here
@@ -184,10 +186,10 @@ jira_to_elastic.retrieve_fields_from_jira(is_update = False)
 
 # Schedule the script to run every n type of time
 # schedule.every().monday.at("09:00").do(jira_to_elastic.run, is_update = True)
-# schedule.every(60).seconds.do(jira_to_elastic.retrieve_fields_from_jira, is_update = True)
-# schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
+schedule.every(20).seconds.do(jira_to_elastic.retrieve_fields_from_jira, is_update = True)
+schedule.every(5).hours.do(jira_to_elastic.authenticate) # idle is max 5 hours
 
 # # Keep running the scheduled job
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
+while True:
+    schedule.run_pending()
+    time.sleep(1)
