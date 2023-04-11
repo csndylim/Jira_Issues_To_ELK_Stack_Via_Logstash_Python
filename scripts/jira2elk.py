@@ -33,7 +33,7 @@ class JiraToElasticsearch:
     def authenticate(self):
         # Set up Jira
         options = {'server': '{}:{}'.format(self.jira_host, self.jira_port)}
-        self.jira = JIRA(options, token_auth=self.jira_token)
+        self.jira = JIRA(options, token_auth=self.jira_token,  logging=True)
         logging.info("Authenticated Jira using api token on " + self.jira_host + ":" + str(self.jira_port)) 
 
         self.es = Elasticsearch(
@@ -161,7 +161,11 @@ class JiraToElasticsearch:
 
 # Load the environment variables and set up logging
 load_dotenv()
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("jira").setLevel(logging.DEBUG)
+logging.getLogger("elasticsearch").setLevel(logging.DEBUG)
+
 
 # Initialize JiraToElasticsearch object
 jira_to_elastic = JiraToElasticsearch(
@@ -175,7 +179,7 @@ jira_to_elastic = JiraToElasticsearch(
     elastic_host = os.environ.get('ELASTIC_HOST'),
     elastic_port = int(os.environ.get('ELASTIC_PORT')),
     elastic_scheme = os.environ.get('ELASTIC_SCHEME'),
-    elastic_index = 'jiratestv25-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
+    elastic_index = 'jiratestv30-' + str((datetime.date.today() - datetime.timedelta(days = 0)).strftime('%Y-%m-%d')),
     created_date = str((datetime.date.today() - datetime.timedelta(days = 60)).strftime('%Y-%m-%d')),
     updated_date = str((datetime.date.today() - datetime.timedelta(days = 30)).strftime('%Y-%m-%d'))
 )
