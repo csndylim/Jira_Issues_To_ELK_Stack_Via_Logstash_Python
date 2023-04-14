@@ -47,6 +47,16 @@ class JiraToElasticsearch:
             for k, v in d.copy().items():
                 if any(item in k.lower() for item in ("url", "self", "timezone")): 
                     del d[k]
+                elif v is None:
+                    del d[k]
+                elif 'customfield' in k.lower():
+                    if isinstance(v, list):
+                        for item in v:
+                            if isinstance(item, dict) and 'emailAddress' in item:
+                                del d[k]
+                                break
+                    elif isinstance(v, dict) and 'emailAddress' in v:
+                        del d[k]
                 else:
                     self.remove_certain_fields(v)
         elif isinstance(d, list):
